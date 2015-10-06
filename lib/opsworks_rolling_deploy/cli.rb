@@ -1,6 +1,6 @@
 require 'clamp'
-require 'opsworks_rolling_deploy/commands/describe'
-require 'opsworks_rolling_deploy/commands/deploy'
+require 'opsworks_rolling_deploy/commands/describe_command'
+require 'opsworks_rolling_deploy/commands/deploy_command'
 
 module OpsworksRollingDeploy
   class Cli < Clamp::Command
