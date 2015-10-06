@@ -3,4 +3,4 @@
 require 'bundler/setup'
 require 'opsworks_rolling_deploy/cli'
 
-OpsworkdsRollingDeploy::Cli.run
+OpsworksRollingDeploy::Cli.run
