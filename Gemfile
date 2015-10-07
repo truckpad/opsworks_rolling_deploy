@@ -9,4 +9,5 @@ group :development, :test do
   gem 'rake', '~> 10.0'
   gem 'rspec'
   gem 'simplecov'
+  gem 'byebug'
 end

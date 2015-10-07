@@ -7,6 +7,7 @@ module OpsworksRollingDeploy
       option "--stack", "STACK_NAME", "the stack name", :required => false
       option "--app", "APP_NAME", "the application name", :required => false
       option "--layer", "LAYER_NAME", "the layer name", :required => false
+
       def execute
         OpsworksRollingDeploy::Services::DescribeService.new.describe(stack, app, layer)
       end
