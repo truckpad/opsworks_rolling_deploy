@@ -1,13 +1,15 @@
 require 'colorize'
 require 'opsworks_rolling_deploy/clients'
+require 'opsworks_rolling_deploy/output_methods'
+require 'opsworks_rolling_deploy/elb_methods'
 
 module OpsworksRollingDeploy
-	module Services
-		class DeployService
-      ELB_STATUS_INSERVICE    = "InService"
-      ELB_STATUS_OUTOFSERVICE = "OutOfService"
+  module Services
+    class DeployService
 
-			include OpsworksRollingDeploy::Clients 
+      include OpsworksRollingDeploy::Clients 
+      include OpsworksRollingDeploy::OutputMethods
+      include OpsworksRollingDeploy::ElbMethods
 
       def deploy(stack_name, app_name, pretend = true, exclude_patterns = [])
         @pretend = pretend
@@ -15,6 +17,7 @@ module OpsworksRollingDeploy
         app   = get_app(stack, app_name)
 
         instances = instances_to_deploy(stack, app, exclude_patterns)
+        instances.shuffle!
         instances.each_with_index do |instance, idx|
           info instance.hostname, instance.ec2_instance_id
           pools = remove_from_pools(stack, app, instance)
@@ -25,22 +28,8 @@ module OpsworksRollingDeploy
 
       protected
 
-      def pools_of_instance(stack, instance)
-        ops_client.describe_elastic_load_balancers({
-          layer_ids: instance.layer_ids,
-          }).elastic_load_balancers
-      end
-
-      def warn(*strs)
-        puts strs.join(' ').yellow
-      end
-
-      def info(*strs)
-        puts strs.join(' ').blue
-      end
-
       def match?(hostname, patterns)
-        patterns.any?{|p| File.fnmatch?(p, hostname)}
+        patterns.any?{|pattern| File.fnmatch?(pattern, hostname)}
       end
 
       def get_stack(stack_name)
@@ -64,107 +53,55 @@ module OpsworksRollingDeploy
         # XXX I did not figure out how to filter instances running the app 
         ops_client.describe_instances(stack_id: stack.stack_id).instances.select do |instance|
           if match?(instance.hostname, exclude_patterns)
-            warn '  ', instance.hostname, instance.ec2_instance_id, "Skipping because it's excluded"
+            warn 'Instance', instance.hostname, instance.ec2_instance_id, "Skipping because it's excluded"
             next false
           end
 
           if instance.status != 'online'
-            warn '  ', instance.hostname, instance.ec2_instance_id, "Skipping because it's not online"
+            warn 'Instance', instance.hostname, instance.ec2_instance_id, "Skipping because it's not online"
             next false
           end
           true
         end
       end
 
-      def remove_from_pools(stack, _app, instance)
-        # XXX I did not figure out how to filter instances running the app 
-        pools = pools_of_instance(stack, instance).each do |elb|
-          info '  ', instance.hostname, instance.ec2_instance_id, "Remove from pool #{elb.elastic_load_balancer_name}"
-          deregister_instances_from_load_balancer(elb, instance.ec2_instance_id) unless pretend?        
-        end
-        
-        pools.each do |elb|
-          wait_status(elb, instance.ec2_instance_id, ELB_STATUS_OUTOFSERVICE)
-        end unless pretend?
-
-        pools
-      end
-
-      def add_into_pools(stack, instance, pools)
-        pools.each do |elb|
-          info '  ', instance.hostname, instance.ec2_instance_id, "Adding back to pool #{elb.elastic_load_balancer_name}"
-          register_instances_with_load_balancer(elb, instance.ec2_instance_id) unless pretend?        
-        end
-
-        pools.each do |elb|
-          wait_status(elb, instance.ec2_instance_id, ELB_STATUS_INSERVICE)
-        end unless pretend?
-      end
-
-      def deregister_instances_from_load_balancer(elb, instance_id)
-        elb_client(elb.region).deregister_instances_from_load_balancer({
-          load_balancer_name: elb.elastic_load_balancer_name,
-          instances: [ # required
-            { instance_id:  instance_id }
-          ]
-          })
-      end
-
-      def register_instances_with_load_balancer(elb, instance_id)
-        elb_client(elb.region).register_instances_with_load_balancer({
-          load_balancer_name: elb.elastic_load_balancer_name,
-          instances: [ # required
-            { instance_id:  instance_id }
-          ]
-          })
-      end
-
       def create_deployment(stack, app, instance, comment)
-        info '  ', instance.hostname, instance.ec2_instance_id, ["Deploying", comment].join(' ')
+        info 'Instance', instance.hostname, instance.ec2_instance_id, "Deploying", comment
         return if pretend?
-        deployment = ops_client.create_deployment(p( {
+        deployment = ops_client.create_deployment({
           stack_id: stack.stack_id,
           command: {name: 'deploy'}, 
           comment: 'Roll ' + comment,  
           custom_json: '{}',
           app_id: app.app_id,
           instance_ids: [instance.instance_id], 
-          })) 
+          }) 
         wait_until_deployed(deployment.deployment_id)
       end
 
       def wait_until_deployed(deployment_id)
         deployment = nil
-        loop do
-          result = ops_client.describe_deployments(deployment_ids: [deployment_id])
-          deployment = result[:deployments].first
-          break unless deployment[:status] == "running"
-          print "."
-          sleep 5
-        end
-        deployment
-      end
+        
+        status = ops_client.describe_deployments(deployment_ids: [deployment_id]).deployments.first.status
+        $stdout.write status
 
-      def wait_status(elb, instance_id, status)
-        100.times do
-          p instance_status = get_elb_status(elb, instance_id)
-          return true if instance_status ==  status
-          sleep 1
+        loop do
+          sleep 5
+
+          $stdout.write "."
+          status = ops_client.describe_deployments(deployment_ids: [deployment_id]).deployments.first.status
+
+          if status != "running"
+            puts status 
+            fail "Deploy status #{status}}" if status != 'successful'
+            return
+          end
         end
-        fail "Time out while waiting status"
       end
 
       def pretend?
         @pretend && true
       end
-
-      def get_elb_status(elb, instance_id)
-        elb_client(elb.region).describe_instance_health({
-          load_balancer_name: elb.elastic_load_balancer_name,
-          instances: [ {instance_id: instance_id} ] 
-          }).instance_states.last.state
-      end
     end
-
   end
 end
