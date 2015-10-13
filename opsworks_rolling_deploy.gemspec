@@ -22,6 +22,7 @@ Gem::Specification.new do |spec|
   spec.add_runtime_dependency 'clamp'
   spec.add_runtime_dependency 'aws-sdk'
   spec.add_runtime_dependency 'colorize'
+  spec.add_runtime_dependency 'json'
 
   spec.add_development_dependency 'rake', '~> 10.0'
   spec.add_development_dependency 'rspec'
