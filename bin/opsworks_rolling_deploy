@@ -1,6 +1,5 @@
 #!/usr/bin/env ruby
 
-require 'bundler/setup'
 require 'opsworks_rolling_deploy/cli'
 
 OpsworksRollingDeploy::Cli.run
