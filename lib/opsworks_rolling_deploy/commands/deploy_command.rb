@@ -1,6 +1,6 @@
 require 'clamp'
 require 'opsworks_rolling_deploy/services/deploy_service'
-
+require 'JSON'
 module OpsworksRollingDeploy
   module Commands
     class DeployCommand < Clamp::Command
@@ -9,12 +9,19 @@ module OpsworksRollingDeploy
 
       option "--stack", "STACK_NAME", "the stack name", required: true
       option "--app", "APP_NAME", "the application name", required: true
+      option "--layer", "LAYER_NAME", "the layer name", required: false
+
+      option "--command", "COMMAND", "the command to be executed by opsworks", default: 'deploy'
+      option "--command-args", "COMMAND_ARGS", "the args to the command to be executed by opsworks as JSON (e.g. '{\"migrate\":[\"true\"]}'", default: '{}'
+      
       option "--pretend", :flag, "pretend execution"
+      option "--verbose", :flag, "display aws commands"
       option "--exclude", "PATTERN" , "wildcard pattern to exclude hosts", multivalued: true 
 
       def execute
+        OpsworksRollingDeploy.set_verbose(verbose?)
         OpsworksRollingDeploy.set_auth_default(aws_id, aws_secret) if aws_id
-        Services::DeployService.new.deploy(stack, app, pretend?, exclude_list)
+        Services::DeployService.new.deploy(stack, layer, app, command, JSON.parse(command_args), pretend?, exclude_list)
       end
     end
   end

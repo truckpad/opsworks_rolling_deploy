@@ -10,8 +10,11 @@ module OpsworksRollingDeploy
       option "--stack", "STACK_NAME", "the stack name", :required => false
       option "--app", "APP_NAME", "the application name", :required => false
       option "--layer", "LAYER_NAME", "the layer name", :required => false
+      option "--verbose", :flag, "display aws commands"
 
       def execute
+        OpsworksRollingDeploy.set_verbose(verbose?)
+
         OpsworksRollingDeploy.set_auth_default(aws_id, aws_secret) if aws_id
         OpsworksRollingDeploy::Services::DescribeService.new.describe(stack, app, layer)
       end
