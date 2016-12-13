@@ -13,6 +13,7 @@ module OpsworksRollingDeploy
 
       option "--command", "COMMAND", "the command to be executed by opsworks", default: 'deploy'
       option "--command-args", "COMMAND_ARGS", "the args to the command to be executed by opsworks as JSON (e.g. '{\"migrate\":[\"true\"]}'", default: '{}'
+      option "--custom-json", "CUSTOM_JSON", " A string that contains user-defined, custom JSON. It is used to override the corresponding default stack configuration JSON values (e.g. '{\"key1\": \"value1\", \"key2\": \"value2\",...}'", default: '{}'
 
       option "--pretend", :flag, "pretend execution"
       option "--verbose", :flag, "display aws commands"
@@ -21,7 +22,7 @@ module OpsworksRollingDeploy
       def execute
         OpsworksRollingDeploy.set_verbose(verbose?)
         OpsworksRollingDeploy.set_auth_default(aws_id, aws_secret) if aws_id
-        Services::DeployService.new.deploy(stack, layer, app, command, JSON.parse(command_args), pretend?, exclude_list)
+        Services::DeployService.new.deploy(stack, layer, app, command, JSON.parse(command_args), custom_json, pretend?, exclude_list)
       end
     end
   end

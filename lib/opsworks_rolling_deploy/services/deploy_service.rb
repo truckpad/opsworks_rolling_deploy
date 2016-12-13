@@ -7,11 +7,11 @@ module OpsworksRollingDeploy
   module Services
     class DeployService
 
-      include OpsworksRollingDeploy::Clients 
+      include OpsworksRollingDeploy::Clients
       include OpsworksRollingDeploy::OutputMethods
       include OpsworksRollingDeploy::ElbMethods
 
-      def deploy(stack_name, layer_name, app_name, command, command_args, pretend = true, exclude_patterns = [])
+      def deploy(stack_name, layer_name, app_name, command, command_args, custom_json, pretend = true, exclude_patterns = [])
         @pretend = pretend
         stack = get_stack(stack_name) || fail("Stack not found #{stack_name}'")
         app   = get_app(stack, app_name) || fail("App not found #{app_name}'")
@@ -22,7 +22,7 @@ module OpsworksRollingDeploy
         instances.each_with_index do |instance, idx|
           pools = remove_from_pools(stack, app, instance)
           comment = [ (layer ? layer.name : 'Full'), "#{idx+1}/#{instances.size}" ].compact.join(' ')
-          create_deployment(stack, app, instance, command, command_args, comment) 
+          create_deployment(stack, app, instance, command, command_args, custom_json, comment)
           add_into_pools(stack, instance, pools)
         end
       end
@@ -60,7 +60,7 @@ module OpsworksRollingDeploy
       end
 
       def instances_to_deploy(stack, layer, _app, exclude_patterns)
-        # XXX I did not figure out how to filter instances running the app 
+        # XXX I did not figure out how to filter instances running the app
 
         ops_client.describe_instances(stack_id: stack.stack_id).instances.select do |instance|
           if layer && !instance.layer_ids.include?(layer.layer_id)
@@ -81,17 +81,17 @@ module OpsworksRollingDeploy
         end
       end
 
-      def create_deployment(stack, app, instance, command, command_args, comment)
+      def create_deployment(stack, app, instance, command, command_args, custom_json, comment)
         info 'Instance', instance.hostname, instance.ec2_instance_id, "Deploying", comment
         return if pretend?
         deployment = ops_client.create_deployment({
           stack_id: stack.stack_id,
-          command: {name: command, args: command_args || {}}, 
-          comment: comment,   
-          custom_json: '{}',
+          command: {name: command, args: command_args || {}},
+          comment: comment,
+          custom_json: custom_json,
           app_id: app.app_id,
-          instance_ids: [instance.instance_id], 
-          }) 
+          instance_ids: [instance.instance_id],
+          })
         wait_until_deployed(deployment.deployment_id)
       end
 
@@ -108,7 +108,7 @@ module OpsworksRollingDeploy
           status = ops_client.describe_deployments(deployment_ids: [deployment_id]).deployments.first.status
 
           if status != "running"
-            puts status 
+            puts status
             fail "Deploy status #{status}}" if status != 'successful'
             return
           end
